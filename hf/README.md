@@ -5,7 +5,7 @@ license: other
 
 # Hong Kong live road feeds and alerts
 
-Snapshots every 15 minutes by [AlreadyOpen/hk-alerts](https://github.com/AlreadyOpen/hk-alerts). This Kaggle dataset holds one complete Hong Kong month of one history feed: the day files listed below for that feed.
+Snapshots every 15 minutes by [AlreadyOpen/hk-alerts](https://github.com/milleleaf/hk-alerts). This Kaggle dataset holds one complete Hong Kong month of one history feed: the day files listed below for that feed.
 
 | File on the bucket | From | Contents |
 |---|---|---|

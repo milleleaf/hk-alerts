@@ -10,7 +10,7 @@ import datetime, json, os, re, subprocess, sys, tempfile, time
 from huggingface_hub import batch_bucket_files, download_bucket_files, list_bucket_tree
 import kaggle_mirror
 
-REPO = 'alreadyopen/hk-alerts'
+REPO = 'milleleaf/hk-alerts'
 DAY = re.compile(r'live/(speeds|detectors|journeytimes|roadworks)-(\d{4}-\d{2})-\d{2}\.parquet')
 TITLE = {'speeds': 'road segment speeds', 'detectors': 'traffic detectors', 'journeytimes': 'journey times', 'roadworks': 'roadworks'}
 slug = lambda feed, month: f"helenkwok/hk-alerts-{feed}-{month}"
