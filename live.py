@@ -18,7 +18,7 @@ import datetime, email.utils, json, os, re, sys, tempfile, urllib.request
 import xml.etree.ElementTree as ET
 
 REPO = 'milleleaf/hk-alerts'
-UA = {'User-Agent': 'AlreadyOpen hk-alerts (https://github.com/milleleaf/hk-alerts)'}
+UA = {'User-Agent': 'Milleleaf hk-alerts (https://github.com/milleleaf/hk-alerts)'}
 AQHI = 'https://www.aqhi.gov.hk/epd/ddata/html/out/aqhi_ind_rss_Eng.xml'
 STATIONS = ('https://portal.csdi.gov.hk/server/rest/services/common/epd_rcd_1629267205214_40635/FeatureServer/0/query'
             '?where=1%3D1&outFields=*&outSR=4326&f=geojson')   # all fields: EPD renames them 14-16 Oct 2026 (NAME_EN -> NameEN)

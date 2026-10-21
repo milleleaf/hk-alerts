@@ -1,4 +1,4 @@
-# Hong Kong feeds (live.py): AQHI, press releases, EV chargers, and road speed/detector/journey-time/roadworks history, every 15 minutes. Dispatched by AlreadyOpen/heartbeat
+# Hong Kong feeds (live.py): AQHI, press releases, EV chargers, and road speed/detector/journey-time/roadworks history, every 15 minutes. Dispatched by milleleaf/heartbeat
 # (GitHub delays or drops schedules under load); the cron below is the backup. A source that fails is skipped for that run.
 name: live
 on:
