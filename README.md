@@ -1,7 +1,7 @@
 # hk-alerts
 
 An [Milleleaf](https://github.com/milleleaf) pipeline: Hong Kong feeds for WorldViews, every 15 minutes, to the Hugging Face
-bucket `alreadyopen/hk-alerts` (CORS, HTTP Range). Two jobs: republish feeds a web page cannot read itself (no CORS, or field
+bucket `milleleaf/hk-alerts` (CORS, HTTP Range). Two jobs: republish feeds a web page cannot read itself (no CORS, or field
 names about to change), and keep a history of live road feeds that the sources themselves do not keep.
 
 | File on the bucket | From | Contents |
