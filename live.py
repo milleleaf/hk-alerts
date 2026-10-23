@@ -4,7 +4,10 @@
   live/press.json  the Government's latest press releases (info.gov.hk RSS, newest 100): title, link, time; no body text
   live/ev-chargers.json  EPD's electric vehicle chargers for public access (CSDI), GeoJSON, every source field kept plus stable
                    names (name, address, district, chargers by kind): EPD renames its CSDI fields 14-16 Oct 2026
+  live/ev-availability.json  EPD's live charger availability per car park (the DATA_PATH of the CSDI charger layer), GeoJSON with
+                   every source field: free chargers now, operators (CLPe's sites included), fees, opening hours
   live/clp-chargers.json  CLP Power's EV charging stations, as received, if its API answers this runner (it refused a Mac in HK)
+  live/status.json per source: last try, last success, last error, count; never_succeeded=true for a source with no success yet
 The above are overwritten in place. History, every 15 minutes, one file per feed per Hong Kong day, appended each run (one row
 per item per snapshot, every source field; `snapshot` = this run's UTC time):
   live/speeds-YYYY-MM-DD.parquet       TD speeds per road segment (irnAvgSpeed, every 2 min at source; joins hk-roads ROUTE_ID)
@@ -12,7 +15,7 @@ per item per snapshot, every source field; `snapshot` = this run's UTC time):
   live/journeytimes-YYYY-MM-DD.parquet TD journey time indicators v2 (minutes or a description, colour 1-3)
   live/roadworks-YYYY-MM-DD.parquet    HyD/TD roadworks with lane closures on 70 km/h+ roads (GeoParquet)
 Browsers read the live TD files themselves (CORS *); these copies are the history. kaggle_archive.py moves each complete month
-to Kaggle. A source that fails keeps its last file (the run warns, exit 0).
+to Kaggle. A source that fails keeps its last file (the run warns, exit 0; status.json records it).
 Needs HF_TOKEN. `python3 live.py test` writes to ./data/ and uploads nothing."""
 import datetime, email.utils, json, os, re, sys, tempfile, urllib.request
 import xml.etree.ElementTree as ET
@@ -26,6 +29,7 @@ PRESS = 'https://www.info.gov.hk/gia/rss/general_en.xml'
 EV = ('https://portal.csdi.gov.hk/server/rest/services/common/epd_rcd_1631080339740_69941/FeatureServer/0/query'
       '?where=1%3D1&outFields=*&outSR=4326&f=geojson&resultOffset={offset}')
 CLP = 'https://api.clp.com.hk/evcharger/list'
+EVA = 'https://ev-charger.epd.gov.hk/resource/ev_charger_avail/evca_ver_1_0.json'   # no CORS
 TD = 'https://resource.data.one.gov.hk/td/'
 HKT = datetime.timezone(datetime.timedelta(hours=8))
 
@@ -93,6 +97,29 @@ def ev_chargers():
                            '_chargers': sum(kinds.values()),
                            '_by_kind': {k: v for k, v in kinds.items() if v}}
     return {'type': 'FeatureCollection', 'source': 'Environmental Protection Department, EV chargers for public access (CSDI)', 'features': feats}
+
+
+def ev_availability():
+    """EPD's availability feed as GeoJSON points, every field kept (location moved to the geometry)"""
+    d = json.loads(get(EVA))
+    feats = [{'type': 'Feature', 'geometry': {'type': 'Point', 'coordinates': [r['location']['lng'], r['location']['lat']]},
+              'properties': {k: v for k, v in r.items() if k != 'location'}} for r in d['data'] if r.get('location')]
+    assert len(feats) > 100, f'only {len(feats)} car parks'
+    return {'type': 'FeatureCollection', 'source': 'Environmental Protection Department, EV charger availability',
+            'source_updated': d.get('lastUpdateDate'), 'features': feats}
+
+
+def status(old, report, now):
+    """per-source record carried from the last run's status.json: a failure keeps the last success"""
+    out = {}
+    for name, r in report.items():
+        if name == 'run' or ':' in name: continue
+        o = old.get(name, {})
+        ok = r != 'failed'
+        out[name] = {'last_try': now, 'ok': ok, 'last_success': now if ok else o.get('last_success'),
+                     'error': None if ok else report.get(f'{name}:error'), 'count': r if ok else o.get('count')}
+        out[name]['never_succeeded'] = out[name]['last_success'] is None
+    return out
 
 
 def clp_chargers():
@@ -186,11 +213,13 @@ def main():
     os.makedirs(out_dir, exist_ok=True)
     now = datetime.datetime.now(datetime.UTC).isoformat(timespec='seconds')
     files, report = [], {'run': now}
-    for name, make in (('aqhi', aqhi), ('press', press), ('ev-chargers', ev_chargers), ('clp-chargers', clp_chargers)):
+    errors = {}
+    for name, make in (('aqhi', aqhi), ('press', press), ('ev-chargers', ev_chargers), ('ev-availability', ev_availability),
+                       ('clp-chargers', clp_chargers)):
         try:
             d = make()
         except Exception as e:                                   # one source down: keep its last file, still publish the other
-            print(f'::warning::{name}: {e}; keeping the last file'); report[name] = 'failed'; continue
+            print(f'::warning::{name}: {e}; keeping the last file'); report[name] = 'failed'; errors[name] = str(e)[:300]; continue
         d['fetched'] = now
         path = os.path.join(out_dir, f'{name}.json')
         json.dump(d, open(path, 'w'), ensure_ascii=False, separators=(',', ':'))
@@ -203,11 +232,23 @@ def main():
         try:
             up, snaps = history(name, make, t, w, con, test)
         except Exception as e:
-            print(f'::warning::{name}: {e}; skipped this run'); report[name] = 'failed'; continue
+            print(f'::warning::{name}: {e}; skipped this run'); report[name] = 'failed'; errors[name] = str(e)[:300]; continue
         if up:
             files.append(up)
             if test: os.replace(up[0], os.path.join(out_dir, os.path.basename(up[1])))
         report[name] = {'snapshots_today': snaps}
+    old = {}
+    if not test:
+        from huggingface_hub import download_bucket_files
+        p = os.path.join(w, 'status-old.json')
+        download_bucket_files(REPO, [('live/status.json', p)], raise_on_missing_files=False)
+        if os.path.exists(p): old = json.load(open(p)).get('sources', {})
+    st = status(old, {**report, **{f'{k}:error': v for k, v in errors.items()}}, now)
+    path = os.path.join(out_dir, 'status.json')
+    json.dump({'run': now, 'sources': st}, open(path, 'w'), ensure_ascii=False, indent=1)
+    files.append((path, 'live/status.json'))
+    for name, r in st.items():
+        if r['never_succeeded']: print(f'::warning::{name} has never succeeded')
     if files and not test:
         from huggingface_hub import batch_bucket_files, create_bucket
         create_bucket(REPO, private=False, exist_ok=True)
@@ -215,5 +256,15 @@ def main():
     print(json.dumps(report))
 
 
+def check_status():
+    old = {'clp-chargers': {'last_success': None}, 'aqhi': {'last_success': '2026-10-23T00:00:00+00:00', 'count': 18}}
+    st = status(old, {'run': 't', 'aqhi': 'failed', 'aqhi:error': 'HTTP 500', 'press': 100, 'clp-chargers': 'failed'}, 't')
+    assert st['aqhi'] == {'last_try': 't', 'ok': False, 'last_success': '2026-10-23T00:00:00+00:00', 'error': 'HTTP 500',
+                          'count': 18, 'never_succeeded': False}
+    assert st['press']['ok'] and st['press']['last_success'] == 't' and not st['press']['never_succeeded']
+    assert st['clp-chargers']['never_succeeded'] and set(st) == {'aqhi', 'press', 'clp-chargers'}
+
+
 if __name__ == '__main__':
+    check_status()
     main()

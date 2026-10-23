@@ -9,7 +9,9 @@ names about to change), and keep a history of live road feeds that the sources t
 | `live/aqhi.json` | EPD AQHI RSS (`aqhi.gov.hk`), station positions from the CSDI layer "Air Quality Monitoring Network of Hong Kong" | GeoJSON: one point per station with AQHI, health risk, general or roadside, time |
 | `live/press.json` | Government press releases RSS (`info.gov.hk`) | the newest 100: title, link, time (no body text) |
 | `live/ev-chargers.json` | EPD "Electric Vehicle Chargers for Public Access" (CSDI) | GeoJSON, every source field, plus `_name`, `_address`, `_district`, `_chargers`, `_by_kind` that survive EPD's field renames (14-16 Oct 2026) |
-| `live/clp-chargers.json` | CLP Power "Electric Vehicle Charging Stations" | as received, only if CLP's API answers the runner (it returns 403 to a Mac in Hong Kong) |
+| `live/ev-availability.json` | EPD live charger availability (the CSDI charger layer's `DATA_PATH`) | GeoJSON, one point per car park, every source field: free chargers now, operators (CLPe's 38 sites are here), fees, opening hours |
+| `live/clp-chargers.json` | CLP Power "Electric Vehicle Charging Stations" | as received, only if CLP's API answers the runner (it has returned 403 to every run so far; CLPe's sites are in `ev-availability.json`) |
+| `live/status.json` | this pipeline | per source: last try, last success, last error, count, `never_succeeded` |
 | `live/speeds-YYYY-MM-DD.parquet` | TD "Traffic Data of Strategic / Major Roads", processed (`irnAvgSpeed-all.xml`) | one row per road segment per snapshot: speed, valid, the feed's date, time and IRN version. `segment_id` = `ROUTE_ID` of the TD road network centreline in milleleaf/hk-roads |
 | `live/detectors-YYYY-MM-DD.parquet` | same dataset, raw (`rawSpeedVol-all.xml`) | one row per lane per 30 s period per snapshot: speed, occupancy, volume, s.d. (`sd`), valid. Locations: TD's `traffic_speed_volume_occ_info.csv` |
 | `live/journeytimes-YYYY-MM-DD.parquet` | TD "Journey time indicators (2nd generation)" (`Journeytimev2.xml`) | one row per indicator and destination per snapshot, every field |
