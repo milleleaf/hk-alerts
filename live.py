@@ -6,7 +6,6 @@
                    names (name, address, district, chargers by kind): EPD renames its CSDI fields 14-16 Oct 2026
   live/ev-availability.json  EPD's live charger availability per car park (the DATA_PATH of the CSDI charger layer), GeoJSON with
                    every source field: free chargers now, operators (CLPe's sites included), fees, opening hours
-  live/clp-chargers.json  CLP Power's EV charging stations, as received, if its API answers this runner (it refused a Mac in HK)
   live/status.json per source: last try, last success, last error, count; never_succeeded=true for a source with no success yet
 The above are overwritten in place. History, every 15 minutes, one file per feed per Hong Kong day, appended each run (one row
 per item per snapshot, every source field; `snapshot` = this run's UTC time):
@@ -28,7 +27,6 @@ STATIONS = ('https://portal.csdi.gov.hk/server/rest/services/common/epd_rcd_1629
 PRESS = 'https://www.info.gov.hk/gia/rss/general_en.xml'
 EV = ('https://portal.csdi.gov.hk/server/rest/services/common/epd_rcd_1631080339740_69941/FeatureServer/0/query'
       '?where=1%3D1&outFields=*&outSR=4326&f=geojson&resultOffset={offset}')
-CLP = 'https://api.clp.com.hk/evcharger/list'
 EVA = 'https://ev-charger.epd.gov.hk/resource/ev_charger_avail/evca_ver_1_0.json'   # no CORS
 TD = 'https://resource.data.one.gov.hk/td/'
 HKT = datetime.timezone(datetime.timedelta(hours=8))
@@ -122,12 +120,6 @@ def status(old, report, now):
     return out
 
 
-def clp_chargers():
-    """CLP's list as received; the API refused requests from a Mac in Hong Kong (Akamai 403), so this records what CI gets"""
-    d = json.loads(get(CLP))
-    return {'source': 'CLP Power Hong Kong, EV charging stations', 'data': d, 'features': d if isinstance(d, list) else [d]}
-
-
 def xml_rows(root, item, keep):
     """one dict per <item> element: its leaf children (namespace stripped) plus `keep`, the document-level fields"""
     rows = []
@@ -214,8 +206,7 @@ def main():
     now = datetime.datetime.now(datetime.UTC).isoformat(timespec='seconds')
     files, report = [], {'run': now}
     errors = {}
-    for name, make in (('aqhi', aqhi), ('press', press), ('ev-chargers', ev_chargers), ('ev-availability', ev_availability),
-                       ('clp-chargers', clp_chargers)):
+    for name, make in (('aqhi', aqhi), ('press', press), ('ev-chargers', ev_chargers), ('ev-availability', ev_availability)):
         try:
             d = make()
         except Exception as e:                                   # one source down: keep its last file, still publish the other
@@ -257,12 +248,12 @@ def main():
 
 
 def check_status():
-    old = {'clp-chargers': {'last_success': None}, 'aqhi': {'last_success': '2026-10-23T00:00:00+00:00', 'count': 18}}
-    st = status(old, {'run': 't', 'aqhi': 'failed', 'aqhi:error': 'HTTP 500', 'press': 100, 'clp-chargers': 'failed'}, 't')
+    old = {'new': {'last_success': None}, 'aqhi': {'last_success': '2026-10-23T00:00:00+00:00', 'count': 18}}
+    st = status(old, {'run': 't', 'aqhi': 'failed', 'aqhi:error': 'HTTP 500', 'press': 100, 'new': 'failed'}, 't')
     assert st['aqhi'] == {'last_try': 't', 'ok': False, 'last_success': '2026-10-23T00:00:00+00:00', 'error': 'HTTP 500',
                           'count': 18, 'never_succeeded': False}
     assert st['press']['ok'] and st['press']['last_success'] == 't' and not st['press']['never_succeeded']
-    assert st['clp-chargers']['never_succeeded'] and set(st) == {'aqhi', 'press', 'clp-chargers'}
+    assert st['new']['never_succeeded'] and set(st) == {'aqhi', 'press', 'new'}
 
 
 if __name__ == '__main__':
